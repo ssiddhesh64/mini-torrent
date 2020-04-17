@@ -5,12 +5,17 @@
 #include<netinet/in.h>
 #include<stdlib.h>
 #include<string> 
-#define PORT 8000
+// #define port 8000
+
 using namespace std;
 
-int main(){
+int main(int argc, char** argv){
 
-    int socket_fd, new_fd, val_read;
+    // string p(argv[1]);
+    // cout << p << endl;
+
+    int port = stoi(argv[1]);
+    int socket_fd, val_read;
     struct sockaddr_in serv_addr;
     
     char buffer[1024] = {0};
@@ -21,9 +26,10 @@ int main(){
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
+    memset(&serv_addr, '0', sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_port = htons(port);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
 
     if(connect(socket_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
@@ -45,7 +51,7 @@ int main(){
         printf("Server: %s\n", buffer);
     } 
 
-    
+    close(socket_fd);
 
     return 0;
 }
