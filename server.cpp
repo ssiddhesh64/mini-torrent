@@ -4,7 +4,6 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<stdlib.h>
-//#include<string.h>
 #include<string>
 #define PORT 8000
 using namespace std;
@@ -44,20 +43,17 @@ int main(){
     }
     
     while(1){
-        //cout << "accepted by server" << endl;
         val_read = read(new_fd, buffer, 1024);
         if(strcmp(buffer, "bye")==0) break;
-        //cout << "read by serfer\n";
         printf("Client: %s\n", buffer);
-        cout << "Server: ";
-        //cin.get(msg, 1024, '\n');
-        //cin >> msg;
-        getline(cin, msg);
-        send(new_fd, msg.c_str(), strlen(msg.c_str()), 0);
-        
 
-        printf("Message sent by server");
-    
+        memset(buffer, 0, sizeof buffer); // Clears previous contents
+
+        //msg.clear();     
+        cout << "Server: ";
+        getline(cin, msg);
+        send(new_fd, msg.c_str(), msg.length(), 0);
+            
     }
     return 0;
 }

@@ -4,7 +4,6 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<stdlib.h>
-//#include<string.h>
 #include<string> 
 #define PORT 8000
 using namespace std;
@@ -33,17 +32,16 @@ int main(){
     }
     
     while(1){
+
+        memset(buffer, 0, sizeof buffer);  // Clears previous contents
+
+        //msg.clear();            // Clears previous contents
         cout << "Client: ";
-        //cin.get(msg, 1024, '\n');
-        //cin >> msg;
         getline(cin, msg);
-        send(socket_fd, msg.c_str(), strlen(msg.c_str()), 0);
-      //  printf("Message sent");
+        send(socket_fd, msg.c_str(), msg.length(), 0);
         if(strcmp(msg.c_str(), "bye")==0) break;
         val_read = read(socket_fd, buffer, 1024); 
 
-     //   cout << "buffer length :" << strlen(buffer) << endl;
-    //    cout << "read by client\n"; 
         printf("Server: %s\n", buffer);
     } 
 
