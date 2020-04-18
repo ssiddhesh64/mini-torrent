@@ -15,7 +15,7 @@ int main(int argc, char** argv){
     // cout << p << endl;
     int port = stoi(argv[1]);
     int socket_fd, new_fd, val_read;
-    struct sockaddr_in address;
+    struct sockaddr_in serv_address, cli_address;
     
     char buffer[1024] = {0};
     //char msg[1024];
@@ -25,12 +25,12 @@ int main(int argc, char** argv){
         perror("socket failed");
         exit(EXIT_FAILURE);
     }
-    memset(&address, '0', sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-    address.sin_addr.s_addr = INADDR_ANY;
+    memset(&serv_address, '0', sizeof(serv_address));
+    serv_address.sin_family = AF_INET;
+    serv_address.sin_port = htons(port);
+    serv_address.sin_addr.s_addr = INADDR_ANY;
 
-    if(bind(socket_fd, (struct sockaddr *) &address, sizeof(address)) < 0){
+    if(bind(socket_fd, (struct sockaddr *) &serv_address, sizeof(serv_address)) < 0){
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
@@ -41,11 +41,13 @@ int main(int argc, char** argv){
         exit(EXIT_FAILURE);
     }
 
-    if((new_fd = accept(socket_fd, (struct sockaddr *) &address, (socklen_t*)&address)) < 0){
+    cout << "listening" << endl;
+    if((new_fd = accept(socket_fd, (struct sockaddr *) &cli_address, (socklen_t*)&cli_address)) < 0){
         perror("Accept failed");
         exit(EXIT_FAILURE);
     }
     
+    cout << "accepted connection" << endl;
     while(1){
         val_read = read(new_fd, buffer, 1024);
         if(strcmp(buffer, "bye")==0) break;

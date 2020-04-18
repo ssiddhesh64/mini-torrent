@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<unistd.h>
+#include<arpa/inet.h>
 #include<bits/stdc++.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
@@ -10,9 +11,6 @@
 using namespace std;
 
 int main(int argc, char** argv){
-
-    // string p(argv[1]);
-    // cout << p << endl;
 
     int port = stoi(argv[1]);
     int socket_fd, val_read;
@@ -30,7 +28,8 @@ int main(int argc, char** argv){
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    // serv_addr.sin_addr.s_addr = INADDR_ANY;
+    inet_pton(socket_fd, argv[2], &serv_addr.sin_addr.s_addr);
 
     if(connect(socket_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
         perror("accept failed");
