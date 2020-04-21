@@ -1,4 +1,4 @@
-CC=g++
+CC=g++-9
 
 CFLAGS= -c -Wall
 LIBS=-pthread
@@ -6,14 +6,14 @@ BINS= server client
 
 all: $(BINS)
 
-client: client.o error.o
+server: server.o threadpool.h client_info.h error.h
 	$(CC) -o $@ $^ $(LIBS)
 
-server: server.o error.o
+client: client.o error.h
 	$(CC) -o $@ $^ $(LIBS)
 
-%.o: %.c
-	$(CC) $(CFLAGS) $^ -o $@  
+%.o: %.cpp
+	$(CC) $(CFLAGS) $^ -std=c++0x -o $@  
 
 .PHONE: clean
 

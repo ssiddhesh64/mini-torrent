@@ -11,44 +11,16 @@
 #include<string>
 #include<string.h>
 #include<thread> 
+#include<arpa/inet.h>
 
+#include"threadpool.h"
 #include"error.h"
+#include"client_info.h"
+
+#define SERVER_BACKLOG 20
+#define THREAD_POOL_SIZE 20
 
 using namespace std;
-
-
-typedef struct {
-    struct sockaddr_in address;
-    int sock_fd;
-    // int uid;
-} client_info;
-
-
-void handle_connection(client_info* cli){
-
-    int new_fd = cli->sock_fd;
-    char buffer[1024];
-    memset(buffer, 0, sizeof buffer);   
-    string msg;
-
-    while(1){   
-        cout << "getting in while loop" << endl;
-        int val_read = read(new_fd, buffer, 1024);
-        if(val_read < 0){
-            perror("read error");
-            break;
-        }
-        printf("client: %s\n", buffer);
-        if(strcmp(buffer, "bye")==0) break;
-        memset(buffer, 0, sizeof buffer);               // Clears previous buffer contents
-
-        cout << "server: ";
-        getline(cin, msg);
-        send(new_fd, msg.c_str(), msg.length(), 0);
-    }
-
-    close_connection(new_fd);
-}
 
 int create_socket(int sock_fd, sockaddr_in &serv_address, int port){
 
@@ -68,7 +40,7 @@ int create_socket(int sock_fd, sockaddr_in &serv_address, int port){
     check_error(bind(sock_fd, (struct sockaddr *) &serv_address, sizeof(serv_address)), "bind failed");
     
     // start listening on that port
-    check_error(listen(sock_fd, 5), "listen failed");
+    check_error(listen(sock_fd, SERVER_BACKLOG), "listen failed");
     cout << "listening on port: " << port << endl;
 
     return sock_fd;
@@ -77,11 +49,14 @@ int create_socket(int sock_fd, sockaddr_in &serv_address, int port){
 int main(int argc, char** argv){
 
     int port = stoi(argv[1]);
-    int sock_fd, new_fd, val_read;
+    int sock_fd = 0, new_fd = 0;
     struct sockaddr_in serv_address, cli_address;
     
     // get socket descriptor
     sock_fd = create_socket(sock_fd, serv_address, port);
+
+    Threadpool tp;
+    // auto tp = Threadpool();    // Doesn't work as there is no copy constructor
 
     while(1){
         
@@ -91,18 +66,18 @@ int main(int argc, char** argv){
             exit(EXIT_FAILURE);
         }
 
-        // Client info
-        client_info *cli = (client_info *)malloc(sizeof(client_info*));
+        // client info
+        client_info *cli = (client_info *)malloc(sizeof(client_info));
         cli->address = cli_address;
         cli->sock_fd = new_fd;
         
         cout << "connected successfully to client " << cli_address.sin_addr.s_addr << endl;
-        thread t1(handle_connection, cli);
-        t1.detach();
-            
+        tp.queue_work(cli);
     }
     
     close_connection(sock_fd);
     // close_connection(new_fd);
     return 0;
 }
+
+
