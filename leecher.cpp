@@ -12,16 +12,19 @@
 #include<math.h>
 #include <sys/file.h>
 
-
 #include <cstddef>         // std::size_t
 
 #define BUFFER_SIZE 1024
+#define SERVER_BACKLOG 20
 
 #include"error.h"
 
 using namespace std;
 
 string get_file_name(const string& path);
+int fetch_file(const string& path, int port);
+int create_socket(int sock_fd, sockaddr_in &serv_addr, int port, char* ip);
+void download(string filename, int part_no, int size, const string &path, int port, int part_size);
 
 int create_socket(int sock_fd, sockaddr_in &serv_addr, int port, char* ip){
 
@@ -57,14 +60,13 @@ void download(string filename, int part_no, int size, const string &path, int po
     check_error(connect(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)), "couldn't connect to Server");
     cout << "successfully connected to server..." << endl;
 
+    // query the server, format is
+    // filepath part_no size part_size
     string query = path + " " + to_string(part_no) + " " + to_string(size) + " " + to_string(part_size);
     cout << "query: " << query << endl;
     check_error(write(sock_fd, query.c_str(), query.length()), "send error");
-    // if(strcmp(query.c_str(), "bye")==0){
-    //     perror("Connection closed");
-    //     close(sock_fd);
-    //     exit(EXIT_SUCCESS);
-    // }
+    
+    // write server's response in file
     FILE* fw = fopen(filename.c_str(), "wb");
     if(fw == NULL){
         perror("error opening file\n");
@@ -72,100 +74,77 @@ void download(string filename, int part_no, int size, const string &path, int po
         return ;
     } 
 
+    // this thread is responsible to write at this position
+    // move pointer to desired location
     int pos = part_no * part_size;                               // 512 * 1024 == 524288
     fseek(fw, pos, SEEK_SET);
 
+
     int n_bytes = 0;
     char buffer[BUFFER_SIZE];
-    // int fd = fileno(fw);
-    // flock(fd, LOCK_EX);
     memset(buffer, 0, BUFFER_SIZE);
+
     while((n_bytes = recv(sock_fd, buffer, BUFFER_SIZE, 0)) > 0){
-        // printf("%s", buffer);
         fwrite(buffer, 1, n_bytes, fw);
-        memset(buffer, 0, BUFFER_SIZE);
+        // memset(buffer, 0, BUFFER_SIZE);
     }
-    // flock(fd, LOCK_UN);
+
     fclose(fw);
     close(sock_fd);
 }
 
 int fetch_file(const string& path, int port){
 
-    // char buffer[BUFFER_SIZE];
+    // directory to store downloaded files
     string download_dir = "./Downloads";
     char* fullpath = realpath(download_dir.c_str(), NULL);
     download_dir = fullpath;
     char* ff = realpath(path.c_str(), NULL);
+
+    // get filename from path
     string filename = get_file_name(ff);
+    
+    // Get file size to be fetched
     FILE* fp = fopen(ff, "rb");
-    // Get file size 
     fseek(fp, 0, SEEK_END);
     unsigned long file_size = ftell(fp);
     rewind(fp);  
     fclose(fp);
     cout << "filesize: " << file_size << endl;
     filename = download_dir + "/" + filename;
-
     cout << "file to be created: " << filename << endl;
-    // FILE* fw = fopen(filename.c_str(), "ab");
-    // if(fw == NULL){
-    //     perror("error writing file\n");
-    //     perror("closing connection to server");
-    //     return -1;
-    // } 
 
-    // cout << "opened file successfully\n";
     //--------------------------------------------------------------------
     // create threads to download file simultaneaously
     // We download in parts of 512 kilo-bytes, so calculate no. of parts and size of last remaining part
     int n_threads = 3;
-    
-    // int no_of_parts = ceil(float(file_size) / n_threads);                   // 512 * 1024 == 524288 bytes
-    // int part_size = ceil(float(file_size) / n_threads);
     int part_size = file_size / n_threads;
     int rem_size = file_size % part_size + part_size;
 
-    
     cout << "number of threads: " << n_threads << endl;
+    // n_threads to start simultaneous download
     thread download_thread[n_threads];
-
-    cout << "starting creating threads\n";
+    
+    cout << "started simultaneous download through threads\n";
     for(int j = 0; j < n_threads; j++){
-        if(j == n_threads - 1)
-            download_thread[j] = thread(download, filename, j, rem_size, path, port, part_size);
-        else
+        // last thread has different size to download
+        if(j != n_threads - 1)  
             download_thread[j] = thread(download, filename, j, part_size, path, port, part_size);
-        // download_thread[j].join();
+        else
+            download_thread[j] = thread(download, filename, j, rem_size, path, port, part_size);
     }
+
+    // join all threads
     for(int j = 0; j < n_threads; j++){
         download_thread[j].join();
     }
+
     cout << "thread download complete\n";
-
-
-    //-----------------------------------------------------------
-
-    
-    // string file_name;
-    // cout << "Enter name of new file: ";
-    // cin >> file_name;
-
-    // cout << filename << " file_name\n";
-    // FILE* fw = fopen(filename.c_str(), "wb");
-    // FILE* fw = fopen("black.mp4", "wb");
-    
-
-    // int n_bytes = 0;
-    // while((n_bytes = recv(sock_fd, buffer, BUFFER_SIZE, 0)) > 0){
-    //     // printf("%s", buffer);
-    //     fwrite(buffer, 1, n_bytes, fw);
-    // }
-    // fclose(fw);
-
     return 0;
 }
 
+// returns filename from path 
+// e.g.: returns file.txt from ../../file.txt
 string get_file_name(const string& path){
 
     std::cout << "Splitting: " << path << '\n';
@@ -181,36 +160,14 @@ string get_file_name(const string& path){
 int main(int argc, char** argv){
 
     int port = stoi(argv[1]);
-    // int sock_fd = 0;
-    // struct sockaddr_in serv_addr;
-    
-    // char buffer[BUFFER_SIZE];
-    // memset(buffer, 0, sizeof buffer);   
-    // string msg;
-
-    // sock_fd = create_socket(sock_fd, serv_addr, port, argv[2]);
-
-    // // connect to server on particular IP and port
-    // check_error(connect(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)), "couldn't connect to Server");
-    // cout << "successfully connected to server..." << endl;
-
     string path;
-    // int part_no;
-    // int size;
     cout << "enter filename with path to fetch: ";
     cin >> path;
-    // cout << "enter part no to fetch: ";
-    // cin >> part_no;
-    // cout << "enter size to fetch: ";
-    // cin >> size;
-
-    // string query = path + to_string(part_no) + to_string(size);
 
     if(fetch_file(path, port) < 0) return EXIT_FAILURE;
     
     printf("\nserver's response completed\n");
     printf("closing connection to server\n");
-    fflush(stdout);
 
     return 0;
 }
