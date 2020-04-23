@@ -14,11 +14,13 @@
 #include<string.h>
 #include<thread> 
 
+#define BUFFER_SIZE 1024
+
 #include"error.h"
 
 using namespace std;
 
-int create_socket(int sock_fd,sockaddr_in &serv_addr, int port, char* ip){
+int create_socket(int sock_fd, sockaddr_in &serv_addr, int port, char* ip){
 
     // create socket
     if((sock_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
@@ -44,13 +46,40 @@ int create_socket(int sock_fd,sockaddr_in &serv_addr, int port, char* ip){
     return sock_fd;
 }
 
+int fetch_file(int sock_fd){
+
+    char buffer[BUFFER_SIZE];
+
+    string file_name;
+    cout << "Enter name of new file: ";
+    cin >> file_name;
+
+    cout << file_name << " file_name\n";
+    FILE* fw = fopen(file_name.c_str(), "wb");
+    if(fw == NULL){
+        perror("error writing file\n");
+        perror("closing connection to server");
+        close(sock_fd);
+        return -1;
+    } 
+
+    int n_bytes = 0;
+    while((n_bytes = recv(sock_fd, buffer, BUFFER_SIZE, 0)) > 0){
+        // printf("%s", buffer);
+        fwrite(buffer, 1, n_bytes, fw);
+    }
+    fclose(fw);
+
+    return 0;
+}
+
 int main(int argc, char** argv){
 
     int port = stoi(argv[1]);
-    int sock_fd = 0, n_bytes;
+    int sock_fd = 0;
     struct sockaddr_in serv_addr;
     
-    char buffer[1024] = {0};
+    char buffer[BUFFER_SIZE];
     memset(buffer, 0, sizeof buffer);   
     string msg;
 
@@ -58,21 +87,24 @@ int main(int argc, char** argv){
 
     // connect to server on particular IP and port
     check_error(connect(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)), "couldn't connect to Server");
-    cout << "successfully connected to server" << endl;
+    cout << "successfully connected to server..." << endl;
 
-    while(1){       
-        cout << "client: ";
-        getline(cin, msg);
-        check_error(write(sock_fd, msg.c_str(), msg.length()), "send error");
-        if(strcmp(msg.c_str(), "bye")==0) break;
+    cout << "enter filename to fetch: ";
+    getline(cin, msg);
+    check_error(write(sock_fd, msg.c_str(), msg.length()), "send error");
+    if(strcmp(msg.c_str(), "bye")==0){
+        perror("Connection closed");
+        close(sock_fd);
+        exit(EXIT_SUCCESS);
+    }
 
-        n_bytes = read(sock_fd, buffer, 1024); 
-        if(n_bytes <= 0) break;
+    printf("reading from server\n");
 
-        printf("server: %s\n", buffer);
-        fflush(stdout);
-        memset(buffer, 0, sizeof buffer);               // Clears previous contents
-    } 
+    if(fetch_file(sock_fd) < 0) return EXIT_FAILURE;
+    
+    printf("\nserver's response completed\n");
+    printf("closing connection to server\n");
+    fflush(stdout);
 
     close(sock_fd);
 

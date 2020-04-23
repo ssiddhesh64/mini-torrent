@@ -3,12 +3,22 @@
 #include<arpa/inet.h>
 #include<unistd.h>
 
+#include <limits.h>     // for realpath
+#include <stdlib.h>     // for realpath
+
 #include<thread>
 #include<queue>
 #include<vector>
 #include<mutex>
 #include <condition_variable>
 #include"client_info.h"
+
+#define BUFFER_SIZE 1024
+
+// Threadpool class for server concurrency
+
+// void process_request(client_info* cli);
+void process_request_get_file(client_info* cli);
 
 using namespace std;
 
@@ -42,8 +52,8 @@ class Threadpool{
                 if(thread.joinable())
                     thread.join();
             }
-
         }
+
         void queue_work(client_info* cli){
             // Grab the mutex
             std::lock_guard<std::mutex> g(work_queue_mutex);
@@ -53,7 +63,6 @@ class Threadpool{
 
             // Notify one thread that there are requests to process
             work_queue_cond_var.notify_one();
-
         }
 
     private:
@@ -80,46 +89,94 @@ class Threadpool{
                     cli = work_queue.front();
                     work_queue.pop();
                 }
-
-                process_request(cli);
-
+                // process_request(cli);
+                process_request_get_file(cli);   
             }
-        }
-
-        void process_request(client_info* cli) {
-
-            int new_fd = cli->sock_fd;
-            int n_bytes = 0;
-            char buffer[1024];
-            memset(buffer, 0, sizeof buffer);   
-            string msg;
-
-            cout << "getting in while loop" << endl;
-            while(1){   
-                cout << new_fd << " sock_fd" << endl;
-                n_bytes = read(cli->sock_fd, buffer, 1024);
-                if(n_bytes < 0){
-                    perror("read error");
-                    break;
-                }
-                printf("client: %s\n", buffer);
-                fflush(stdout);
-                if(strcmp(buffer, "bye")==0){
-                    char ip[30];
-                    inet_ntop(AF_INET, &cli->address.sin_addr, ip, sizeof(ip));
-                    cout << "client " << ip << " disconnected\n";
-                    break;
-                }
-                memset(buffer, 0, sizeof buffer);               // Clears previous buffer contents
-
-                cout << "server: ";
-                getline(cin, msg);
-                send(new_fd, msg.c_str(), msg.length(), 0);
-            }
-            // close client socket
-            close(new_fd);
-            
-        }
-            
+        }    
 };
+
+int send_file(char* fullpath, char* buffer, int sock_fd){
+
+    memset(buffer, 0, BUFFER_SIZE); 
+    FILE* fp = fopen(fullpath, "r");
+    if(fp == NULL){
+        perror("error opening file");
+        printf("\nclosing connection\n");
+        close(sock_fd);
+        return -1;
+    }
+
+    long n_bytes = 0;
+    memset(buffer, 0, BUFFER_SIZE);   
+    while((n_bytes = fread(buffer, 1, 1024, fp)) > 0){
+        printf("sending %zu bytes\n", (unsigned long)n_bytes);
+        send(sock_fd, buffer, n_bytes, 0);
+    }
+    fclose(fp);
+    printf("file sent successfully\n");
+
+    return 0;
+}
+
+void process_request_get_file(client_info* cli) {
+
+    int new_fd = cli->sock_fd;
+    int n_bytes = 0;
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0, sizeof buffer);   
+
+    n_bytes = read(cli->sock_fd, buffer, BUFFER_SIZE);
+    if(n_bytes < 0){
+        perror("read error");
+        close(new_fd);
+        exit(EXIT_FAILURE);
+    }
+    // NULL terminate buffer
+    buffer[n_bytes] = 0;
+
+    char* fullpath = realpath(buffer, NULL);
+    if(send_file(fullpath, buffer, new_fd) < 0){
+        perror("error in sending file");
+        exit(EXIT_FAILURE);
+    }
+
+    // close client socket
+    printf("request completed, closing connection\n");
+    close(new_fd);
+}
+
+// void process_request(client_info* cli) {
+
+//     int new_fd = cli->sock_fd;
+//     int n_bytes = 0;
+//     char buffer[1024];
+//     memset(buffer, 0, sizeof buffer);   
+//     string msg;
+
+//     cout << "getting in while loop" << endl;
+//     while(1){   
+//         cout << new_fd << " sock_fd" << endl;
+//         n_bytes = read(cli->sock_fd, buffer, 1024);
+//         if(n_bytes < 0){
+//             perror("read error");
+//             break;
+//         }
+//         printf("client: %s\n", buffer);
+//         fflush(stdout);
+//         if(strcmp(buffer, "bye")==0){
+//             char ip[30];
+//             inet_ntop(AF_INET, &cli->address.sin_addr, ip, sizeof(ip));
+//             cout << "client " << ip << " disconnected\n";
+//             break;
+//         }
+//         memset(buffer, 0, sizeof buffer);               // Clears previous buffer contents
+
+//         cout << "server: ";
+//         getline(cin, msg);
+//         send(new_fd, msg.c_str(), msg.length(), 0);
+//     }
+//     // close client socket
+//     close(new_fd);
+    
+// }
 
